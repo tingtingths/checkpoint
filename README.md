@@ -1,6 +1,6 @@
 # Checkpoint
 
-Backup folder automatically upon changes.
+Archive folder automatically upon changes.
 
 ```shell
 usage: checkpoint [-h] path dest_path
