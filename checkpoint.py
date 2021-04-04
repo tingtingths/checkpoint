@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import logging as l
 
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
@@ -11,11 +12,13 @@ from debounce import debounce
 debounce_sec = 5
 
 
-@debounce(debounce_sec)
 def on_event(evt: FileSystemEvent):
-    # debounced, evt will be last event
     l.debug('%s - %s', evt.event_type, evt.src_path)
 
+
+@debounce(debounce_sec)
+def on_event_debounced(evt: FileSystemEvent):
+    # debounced, evt will be last event
     """
     if EVENT_TYPE_MOVED == evt.event_type:
         pass
@@ -55,13 +58,13 @@ if __name__ == '__main__':
 
     # event
     event_handler = FileSystemEventHandler()
-    event_handler.on_any_event = on_event
+    event_handler.on_any_event = lambda evt: on_event_debounced(evt)
     observer = Observer(timeout=0.1)
     l.debug(f'Observer={observer.__class__}')
     observer.schedule(event_handler, path, recursive=True)
     observer.start()
 
-    l.info(f'Set watchdog on {path}...')
+    l.info(f'Set watchdog on {os.path.abspath(path)}...')
     try:
         pass
     except InterruptedError:
