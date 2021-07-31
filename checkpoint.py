@@ -2,6 +2,7 @@
 import argparse
 import os
 import logging as l
+import time
 
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from watchdog.observers import Observer
@@ -9,27 +10,9 @@ from watchdog.observers import Observer
 import archive
 from debounce import debounce
 
-debounce_sec = 5
-
 
 def on_event(evt: FileSystemEvent):
-    l.debug('%s - %s', evt.event_type, evt.src_path)
-
-
-@debounce(debounce_sec)
-def on_event_debounced(evt: FileSystemEvent):
-    # debounced, evt will be last event
-    """
-    if EVENT_TYPE_MOVED == evt.event_type:
-        pass
-    if EVENT_TYPE_DELETED == evt.event_type:
-        pass
-    if EVENT_TYPE_CREATED == evt.event_type:
-        pass
-    if EVENT_TYPE_MODIFIED == evt.event_type:
-        pass
-    """
-
+    l.debug('Receive event, [%s] - [%s]', evt.event_type, evt.src_path)
     archived = archive.archive_directory('checkpoint', path, dest_path)
     l.info(f'Zipped {path} -> {archived}')
 
@@ -39,6 +22,7 @@ def _setup_parser() -> argparse.ArgumentParser:
                                       description='Monitor and archive folder after contents changed.')
     _parser.add_argument('path', type=str, help='Directory to monitor')
     _parser.add_argument('dest_path', type=str, help='Zip destination')
+    _parser.add_argument('--debounce', '-d', type=int, default=5, help='Filesystem event debounce seconds')
     return _parser
 
 
@@ -52,23 +36,30 @@ if __name__ == '__main__':
     parser = _setup_parser()
     args = parser.parse_args()
 
-    # args
+    # setup with arguments
     path = args.path
     dest_path = args.dest_path
+    on_event_handler = debounce(args.debounce)(on_event)
+    l.info(f'Watching {path}')
+    l.info(f'Destination {dest_path}')
+    l.info(f'Debounce interval {args.debounce} seconds')
 
-    # event
+    # event handling
     event_handler = FileSystemEventHandler()
-    event_handler.on_any_event = lambda evt: on_event_debounced(evt)
+    event_handler.on_any_event = lambda evt: on_event_handler(evt)
+
     observer = Observer(timeout=0.1)
-    l.debug(f'Observer={observer.__class__}')
+    l.debug(f'Observer is {observer.__class__}')
     observer.schedule(event_handler, path, recursive=True)
     observer.start()
 
     l.info(f'Set watchdog on {os.path.abspath(path)}...')
     try:
-        pass
+        while True:
+            time.sleep(1)
     except InterruptedError:
+        l.info('Interrupted...')
         observer.stop()
-    finally:
-        observer.join()
-        l.info('Stopped watchdog.')
+
+    observer.join()
+    l.info('Stopped watchdog.')
